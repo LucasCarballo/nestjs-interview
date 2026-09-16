@@ -28,7 +28,7 @@ export class ListItemsController {
   @Get('/:listItemId')
   show(
     @Param() param: { todoListId: number; listItemId: number },
-  ): Promise<ListItem | null> {
+  ): Promise<ListItem> {
     return this.listItemsService.get(param.todoListId, param.listItemId);
   }
 

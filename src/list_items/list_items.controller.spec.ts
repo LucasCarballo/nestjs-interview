@@ -1,117 +1,92 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { ListItemsController } from './list_items.controller';
 import { ListItemsService } from './list_items.service';
-import { INestApplication } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { ListItem } from './list_item.entity';
 
 describe('ListItemsController', () => {
-  let app: INestApplication;
-  let listItemsController: ListItemsController;
-  let listItemRepositoryMock: jest.Mocked<Record<string, jest.Mock>>;
+  let controller: ListItemsController;
+  let service: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
-    listItemRepositoryMock = {
-      find: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
+    service = {
+      all: jest.fn(),
+      get: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ListItemsController],
-      providers: [
-        ListItemsService,
-        {
-          provide: getRepositoryToken(ListItem),
-          useValue: listItemRepositoryMock,
-        },
-      ],
+      providers: [{ provide: ListItemsService, useValue: service }],
     }).compile();
 
-    app = module.createNestApplication();
-    await app.init();
-
-    listItemsController = module.get<ListItemsController>(ListItemsController);
-  });
-
-  afterAll(async () => {
-    await app.close();
+    controller = module.get<ListItemsController>(ListItemsController);
   });
 
   describe('index', () => {
-    it('should return all list items for a todo list', async () => {
-      const mockItems = [
-        { id: 1, value: 'Buy milk', todoListId: 1 },
-        { id: 2, value: 'Buy eggs', todoListId: 1 },
-      ];
+    it('delegates to service.all with the todoListId', async () => {
+      const items = [{ id: 1, value: 'Buy milk', todoListId: 1 }];
+      service.all.mockResolvedValue(items);
 
-      listItemRepositoryMock.find.mockResolvedValue(mockItems);
-
-      const result = await listItemsController.index({ todoListId: 1 });
-
-      expect(result).toEqual(mockItems);
+      await expect(controller.index({ todoListId: 1 })).resolves.toEqual(items);
+      expect(service.all).toHaveBeenCalledWith(1);
     });
   });
 
   describe('show', () => {
-    it('should return a single list item by id', async () => {
-      const mockItem = { id: 1, value: 'Buy milk', todoListId: 1 };
-      listItemRepositoryMock.findOneBy.mockResolvedValue(mockItem);
+    it('delegates to service.get with both ids from params', async () => {
+      const item = { id: 1, value: 'Buy milk', todoListId: 1 };
+      service.get.mockResolvedValue(item);
 
-      const result = await listItemsController.show({
-        todoListId: 1,
-        listItemId: 1,
-      });
+      await expect(
+        controller.show({ todoListId: 1, listItemId: 1 }),
+      ).resolves.toEqual(item);
+      expect(service.get).toHaveBeenCalledWith(1, 1);
+    });
 
-      expect(result).toEqual(mockItem);
+    it('propagates NotFoundException from the service', async () => {
+      service.get.mockRejectedValue(new NotFoundException());
+      await expect(
+        controller.show({ todoListId: 1, listItemId: 999 }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('create', () => {
-    it('should create a new list item under a todo list', async () => {
-      const createDto = { value: 'Buy milk' };
-      const mockCreated = { id: 1, value: 'Buy milk', todoListId: 1 };
+    it('delegates to service.create with the todoListId and body', async () => {
+      const dto = { value: 'Buy milk' };
+      const created = { id: 1, value: 'Buy milk', todoListId: 1 };
+      service.create.mockResolvedValue(created);
 
-      listItemRepositoryMock.create.mockReturnValue(mockCreated);
-      listItemRepositoryMock.save.mockResolvedValue(mockCreated);
-
-      const result = await listItemsController.create(
-        { todoListId: 1 },
-        createDto,
+      await expect(controller.create({ todoListId: 1 }, dto)).resolves.toEqual(
+        created,
       );
-
-      expect(result).toEqual(mockCreated);
+      expect(service.create).toHaveBeenCalledWith(1, dto);
     });
   });
 
   describe('update', () => {
-    it('should update an existing list item', async () => {
-      const updateDto = { value: 'Buy oat milk' };
-      const updatedItem = { id: 1, value: 'Buy oat milk', todoListId: 1 };
+    it('delegates to service.update converting the item id to a number', async () => {
+      const dto = { value: 'Buy oat milk' };
+      const updated = { id: 1, value: 'Buy oat milk', todoListId: 1 };
+      service.update.mockResolvedValue(updated);
 
-      listItemRepositoryMock.save.mockResolvedValue(updatedItem);
-
-      const result = await listItemsController.update(
-        { todoListId: 1, listItemId: '1' },
-        updateDto,
-      );
-
-      expect(result).toEqual(updatedItem);
+      await expect(
+        controller.update({ todoListId: 1, listItemId: '1' }, dto),
+      ).resolves.toEqual(updated);
+      expect(service.update).toHaveBeenCalledWith(1, 1, dto);
     });
   });
 
   describe('delete', () => {
-    it('should delete a list item', async () => {
-      listItemRepositoryMock.delete.mockResolvedValue({ affected: 1 });
+    it('delegates to service.delete with both ids from params', async () => {
+      service.delete.mockResolvedValue(undefined);
 
-      await listItemsController.delete({ todoListId: 1, listItemId: 1 });
-
-      expect(listItemRepositoryMock.delete).toHaveBeenCalledWith({
-        id: 1,
-        todoListId: 1,
-      });
+      await expect(
+        controller.delete({ todoListId: 1, listItemId: 1 }),
+      ).resolves.toBeUndefined();
+      expect(service.delete).toHaveBeenCalledWith(1, 1);
     });
   });
 });

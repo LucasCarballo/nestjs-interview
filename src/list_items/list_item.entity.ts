@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { TodoList } from '../todo_lists/todo_list.entity';
 
 @Entity()
 export class ListItem {
@@ -14,4 +21,8 @@ export class ListItem {
   @ApiProperty({ example: 1 })
   @Column()
   todoListId: number;
+
+  @ManyToOne(() => TodoList, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'todoListId' })
+  todoList: TodoList;
 }

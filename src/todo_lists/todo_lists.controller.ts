@@ -26,7 +26,7 @@ export class TodoListsController {
 
   @ApiOperation({ summary: 'Get a todo list by id' })
   @Get('/:todoListId')
-  show(@Param() param: { todoListId: number }): Promise<TodoList | null> {
+  show(@Param() param: { todoListId: number }): Promise<TodoList> {
     return this.todoListsService.get(param.todoListId);
   }
 

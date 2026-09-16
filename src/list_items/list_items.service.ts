@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateListItemDto } from './dtos/create-list-item';
 import { UpdateListItemDto } from './dtos/update-list-item';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -16,8 +16,14 @@ export class ListItemsService {
     return await this.listItemRepository.find({ where: { todoListId } });
   }
 
-  async get(todoListId: number, id: number): Promise<ListItem | null> {
-    return await this.listItemRepository.findOneBy({ id, todoListId });
+  async get(todoListId: number, id: number): Promise<ListItem> {
+    const item = await this.listItemRepository.findOneBy({ id, todoListId });
+    if (!item) {
+      throw new NotFoundException(
+        `List item ${id} not found in todo list ${todoListId}`,
+      );
+    }
+    return item;
   }
 
   async create(todoListId: number, dto: CreateListItemDto): Promise<ListItem> {
@@ -30,14 +36,27 @@ export class ListItemsService {
     id: number,
     dto: UpdateListItemDto,
   ): Promise<ListItem> {
-    return await this.listItemRepository.save({
-      id,
-      todoListId,
-      ...dto,
-    } as ListItem);
-}
+    const { affected } = await this.listItemRepository.update(
+      { id, todoListId },
+      dto,
+    );
+    if (!affected) {
+      throw new NotFoundException(
+        `List item ${id} not found in todo list ${todoListId}`,
+      );
+    }
+    return this.get(todoListId, id);
+  }
 
   async delete(todoListId: number, id: number): Promise<void> {
-    await this.listItemRepository.delete({ id, todoListId });
+    const { affected } = await this.listItemRepository.delete({
+      id,
+      todoListId,
+    });
+    if (!affected) {
+      throw new NotFoundException(
+        `List item ${id} not found in todo list ${todoListId}`,
+      );
+    }
   }
 }

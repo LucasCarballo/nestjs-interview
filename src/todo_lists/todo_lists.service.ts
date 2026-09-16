@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateTodoListDto } from './dtos/create-todo_list';
 import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -16,8 +16,12 @@ export class TodoListsService {
     return await this.todoListRepository.find();
   }
 
-  async get(id: number): Promise<TodoList | null> {
-    return await this.todoListRepository.findOneBy({ id });
+  async get(id: number): Promise<TodoList> {
+    const todoList = await this.todoListRepository.findOneBy({ id });
+    if (!todoList) {
+      throw new NotFoundException(`Todo list ${id} not found`);
+    }
+    return todoList;
   }
 
   async create(dto: CreateTodoListDto): Promise<TodoList> {
@@ -26,10 +30,17 @@ export class TodoListsService {
   }
 
   async update(id: number, dto: UpdateTodoListDto): Promise<TodoList> {
-    return await this.todoListRepository.save({ id, ...dto } as TodoList);
+    const { affected } = await this.todoListRepository.update(id, dto);
+    if (!affected) {
+      throw new NotFoundException(`Todo list ${id} not found`);
+    }
+    return this.get(id);
   }
 
   async delete(id: number): Promise<void> {
-    await this.todoListRepository.delete(id);
+    const { affected } = await this.todoListRepository.delete(id);
+    if (!affected) {
+      throw new NotFoundException(`Todo list ${id} not found`);
+    }
   }
 }
