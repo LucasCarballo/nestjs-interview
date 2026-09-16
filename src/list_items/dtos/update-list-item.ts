@@ -1,9 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpdateListItemDto {
-  @ApiProperty({ example: 'Buy oat milk' })
+  @ApiProperty({ example: 'Buy oat milk', required: false })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  value: string;
+  value?: string;
+
+  @ApiProperty({ example: true, required: false })
+  @IsOptional()
+  @IsBoolean()
+  done?: boolean;
 }

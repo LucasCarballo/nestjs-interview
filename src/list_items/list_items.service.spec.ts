@@ -92,4 +92,17 @@ describe('ListItemsService', () => {
       await expect(service.delete(1, 999)).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('markAllDone', () => {
+    it('bulk-updates all items of the todo list in one query', async () => {
+      repo.update.mockResolvedValue({ affected: 3 });
+      await expect(service.markAllDone(1)).resolves.toBeUndefined();
+      expect(repo.update).toHaveBeenCalledWith({ todoListId: 1 }, { done: true });
+    });
+
+    it('throws NotFoundException when the todo list has no items', async () => {
+      repo.update.mockResolvedValue({ affected: 0 });
+      await expect(service.markAllDone(999)).rejects.toThrow(NotFoundException);
+    });
+  });
 });

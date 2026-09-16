@@ -12,11 +12,15 @@ import { CreateTodoListDto } from './dtos/create-todo_list';
 import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { TodoList } from '../interfaces/todo_list.interface';
 import { TodoListsService } from './todo_lists.service';
+import { ListItemsService } from '../list_items/list_items.service';
 
 @ApiTags('todo-lists')
 @Controller('api/todolists')
 export class TodoListsController {
-  constructor(private todoListsService: TodoListsService) {}
+  constructor(
+    private todoListsService: TodoListsService,
+    private listItemsService: ListItemsService,
+  ) {}
 
   @ApiOperation({ summary: 'List all todo lists' })
   @Get()
@@ -43,6 +47,12 @@ export class TodoListsController {
     @Body() dto: UpdateTodoListDto,
   ): Promise<TodoList> {
     return this.todoListsService.update(Number(param.todoListId), dto);
+  }
+
+  @ApiOperation({ summary: 'Mark all items of a todo list as done' })
+  @Put('/:todoListId/done')
+  markDone(@Param() param: { todoListId: number }): Promise<void> {
+    return this.listItemsService.markAllDone(param.todoListId);
   }
 
   @ApiOperation({ summary: 'Delete a todo list' })

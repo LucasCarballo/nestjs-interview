@@ -18,6 +18,10 @@ export class ListItem {
   @Column()
   value: string;
 
+  @ApiProperty({ example: false })
+  @Column({ default: false })
+  done: boolean;
+
   @ApiProperty({ example: 1 })
   @Column()
   todoListId: number;

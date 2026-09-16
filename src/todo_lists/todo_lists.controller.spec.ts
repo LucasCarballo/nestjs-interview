@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { TodoListsController } from './todo_lists.controller';
 import { TodoListsService } from './todo_lists.service';
+import { ListItemsService } from '../list_items/list_items.service';
 
 describe('TodoListsController', () => {
   let controller: TodoListsController;
   let service: jest.Mocked<Record<string, jest.Mock>>;
+  let listItemsService: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
     service = {
@@ -15,10 +17,16 @@ describe('TodoListsController', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
+    listItemsService = {
+      markAllDone: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TodoListsController],
-      providers: [{ provide: TodoListsService, useValue: service }],
+      providers: [
+        { provide: TodoListsService, useValue: service },
+        { provide: ListItemsService, useValue: listItemsService },
+      ],
     }).compile();
 
     controller = module.get<TodoListsController>(TodoListsController);
@@ -81,6 +89,15 @@ describe('TodoListsController', () => {
 
       await expect(controller.delete({ todoListId: 1 })).resolves.toBeUndefined();
       expect(service.delete).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('markDone', () => {
+    it('delegates to listItemsService.markAllDone with the id from params', async () => {
+      listItemsService.markAllDone.mockResolvedValue(undefined);
+
+      await expect(controller.markDone({ todoListId: 1 })).resolves.toBeUndefined();
+      expect(listItemsService.markAllDone).toHaveBeenCalledWith(1);
     });
   });
 });

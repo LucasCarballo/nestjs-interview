@@ -59,4 +59,15 @@ export class ListItemsService {
       );
     }
   }
+
+  async markAllDone(todoListId: number): Promise<void> {
+    // Single bulk UPDATE — one round trip no matter how many items the list has
+    const { affected } = await this.listItemRepository.update(
+      { todoListId },
+      { done: true },
+    );
+    if (!affected) {
+      throw new NotFoundException(`Todo list ${todoListId} not found`);
+    }
+  }
 }

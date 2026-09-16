@@ -117,4 +117,78 @@ describe('Todo API (e2e)', () => {
       .send({ value: 'orphan' })
       .expect(500); // FK violation
   });
+
+  it('marks a single list item as done', async () => {
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
+      .send({ name: 'single done' })
+      .expect(201);
+
+    const item = await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/listitems`)
+      .send({ value: 'Buy milk' })
+      .expect(201);
+    expect(item.body.done).toBe(false);
+
+    // Invalid done value is rejected
+    await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/listitems/${item.body.id}`)
+      .send({ done: 'yes' })
+      .expect(400);
+
+    // Valid toggle
+    const updated = await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/listitems/${item.body.id}`)
+      .send({ done: true })
+      .expect(200);
+    expect(updated.body.done).toBe(true);
+
+    await request(app.getHttpServer())
+      .delete(`/api/todolists/${list.body.id}`)
+      .expect(200);
+  });
+
+  it('marks all list items of a todo list as done in one call', async () => {
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
+      .send({ name: 'bulk done' })
+      .expect(201);
+
+    const itemA = await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/listitems`)
+      .send({ value: 'Buy milk' })
+      .expect(201);
+    const itemB = await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/listitems`)
+      .send({ value: 'Buy eggs' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/done`)
+      .expect(200);
+
+    const items = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}/listitems`)
+      .expect(200);
+    expect(items.body).toHaveLength(2);
+    expect(items.body.map((i) => i.done)).toEqual([true, true]);
+    expect(items.body.map((i) => i.id).sort()).toEqual(
+      [itemA.body.id, itemB.body.id].sort(),
+    );
+
+    // Marking done again is idempotent
+    await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/done`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/api/todolists/${list.body.id}`)
+      .expect(200);
+  });
+
+  it('returns 404 when marking a missing todo list as done', async () => {
+    await request(app.getHttpServer())
+      .put('/api/todolists/999999/done')
+      .expect(404);
+  });
 });
