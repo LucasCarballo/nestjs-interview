@@ -5,5 +5,9 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@nestjs/jwt$": "<rootDir>/__mocks__/@nestjs/jwt.ts",
+    "^bcrypt$": "<rootDir>/__mocks__/bcrypt.ts"
   }
 }

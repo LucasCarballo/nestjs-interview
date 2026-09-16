@@ -3,25 +3,31 @@ import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ListItemsService } from './list_items.service';
 import { ListItem } from './list_item.entity';
+import { TodoList } from '../todo_lists/todo_list.entity';
 
 describe('ListItemsService', () => {
   let service: ListItemsService;
-  let repo: jest.Mocked<Record<string, jest.Mock>>;
+  let itemRepo: jest.Mocked<Record<string, jest.Mock>>;
+  let listRepo: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
-    repo = {
+    itemRepo = {
       find: jest.fn(),
-      findOneBy: jest.fn(),
+      findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     };
+    listRepo = {
+      findOne: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ListItemsService,
-        { provide: getRepositoryToken(ListItem), useValue: repo },
+        { provide: getRepositoryToken(ListItem), useValue: itemRepo },
+        { provide: getRepositoryToken(TodoList), useValue: listRepo },
       ],
     }).compile();
 
@@ -29,36 +35,52 @@ describe('ListItemsService', () => {
   });
 
   describe('all', () => {
-    it('returns all items of a todo list', async () => {
+    it('returns items in one of my todo lists', async () => {
       const items = [{ id: 1, value: 'Buy milk', todoListId: 1 }];
-      repo.find.mockResolvedValue(items);
-      await expect(service.all(1)).resolves.toEqual(items);
-      expect(repo.find).toHaveBeenCalledWith({ where: { todoListId: 1 } });
+      itemRepo.find.mockResolvedValue(items);
+      await expect(service.all(7, 1)).resolves.toEqual(items);
+      expect(itemRepo.find).toHaveBeenCalledWith({
+        where: { todoListId: 1, todoList: { userId: 7 } },
+      });
     });
   });
 
   describe('get', () => {
-    it('returns the item when it exists', async () => {
+    it('returns the item when I own the parent list', async () => {
       const item = { id: 1, value: 'Buy milk', todoListId: 1 };
-      repo.findOneBy.mockResolvedValue(item);
-      await expect(service.get(1, 1)).resolves.toEqual(item);
-      expect(repo.findOneBy).toHaveBeenCalledWith({ id: 1, todoListId: 1 });
+      itemRepo.findOne.mockResolvedValue(item);
+      await expect(service.get(7, 1, 1)).resolves.toEqual(item);
+      expect(itemRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 1, todoListId: 1, todoList: { userId: 7 } },
+      });
     });
 
-    it('throws NotFoundException when it does not exist', async () => {
-      repo.findOneBy.mockResolvedValue(null);
-      await expect(service.get(1, 999)).rejects.toThrow(NotFoundException);
+    it('throws NotFoundException when the item is missing or not mine', async () => {
+      itemRepo.findOne.mockResolvedValue(null);
+      await expect(service.get(7, 1, 999)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('create', () => {
-    it('creates and saves an item under the todo list', async () => {
+    it('creates and saves an item under a list I own', async () => {
       const dto = { value: 'Buy milk' };
+      const list = { id: 1, userId: 7 };
       const saved = { id: 1, value: 'Buy milk', todoListId: 1 };
-      repo.create.mockReturnValue(saved);
-      repo.save.mockResolvedValue(saved);
-      await expect(service.create(1, dto)).resolves.toEqual(saved);
-      expect(repo.create).toHaveBeenCalledWith({ ...dto, todoListId: 1 });
+      listRepo.findOne.mockResolvedValue(list);
+      itemRepo.create.mockReturnValue(saved);
+      itemRepo.save.mockResolvedValue(saved);
+      await expect(service.create(7, 1, dto)).resolves.toEqual(saved);
+      expect(listRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 1, userId: 7 },
+      });
+      expect(itemRepo.create).toHaveBeenCalledWith({ ...dto, todoListId: 1 });
+    });
+
+    it('throws NotFoundException when the parent list is not mine', async () => {
+      listRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.create(7, 999, { value: 'x' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -66,43 +88,46 @@ describe('ListItemsService', () => {
     it('updates an existing item and returns it', async () => {
       const dto = { value: 'Buy oat milk' };
       const updated = { id: 1, value: 'Buy oat milk', todoListId: 1 };
-      repo.update.mockResolvedValue({ affected: 1 });
-      repo.findOneBy.mockResolvedValue(updated);
-      await expect(service.update(1, 1, dto)).resolves.toEqual(updated);
-      expect(repo.update).toHaveBeenCalledWith({ id: 1, todoListId: 1 }, dto);
+      itemRepo.update.mockResolvedValue({ affected: 1 });
+      itemRepo.findOne.mockResolvedValue(updated);
+      await expect(service.update(7, 1, 1, dto)).resolves.toEqual(updated);
+      expect(itemRepo.update).toHaveBeenCalledWith({ id: 1, todoListId: 1 }, dto);
     });
 
     it('throws NotFoundException when nothing was updated', async () => {
-      repo.update.mockResolvedValue({ affected: 0 });
-      await expect(service.update(1, 999, { value: 'x' })).rejects.toThrow(
-        NotFoundException,
-      );
+      itemRepo.update.mockResolvedValue({ affected: 0 });
+      await expect(
+        service.update(7, 1, 999, { value: 'x' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('delete', () => {
-    it('deletes an existing item', async () => {
-      repo.delete.mockResolvedValue({ affected: 1 });
-      await expect(service.delete(1, 1)).resolves.toBeUndefined();
-      expect(repo.delete).toHaveBeenCalledWith({ id: 1, todoListId: 1 });
+    it('deletes an item from one of my lists', async () => {
+      itemRepo.delete.mockResolvedValue({ affected: 1 });
+      await expect(service.delete(7, 1, 1)).resolves.toBeUndefined();
+      expect(itemRepo.delete).toHaveBeenCalledWith({ id: 1, todoListId: 1 });
     });
 
     it('throws NotFoundException when nothing was deleted', async () => {
-      repo.delete.mockResolvedValue({ affected: 0 });
-      await expect(service.delete(1, 999)).rejects.toThrow(NotFoundException);
+      itemRepo.delete.mockResolvedValue({ affected: 0 });
+      await expect(service.delete(7, 1, 999)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('markAllDone', () => {
     it('bulk-updates all items of the todo list in one query', async () => {
-      repo.update.mockResolvedValue({ affected: 3 });
-      await expect(service.markAllDone(1)).resolves.toBeUndefined();
-      expect(repo.update).toHaveBeenCalledWith({ todoListId: 1 }, { done: true });
+      itemRepo.update.mockResolvedValue({ affected: 3 });
+      await expect(service.markAllDone(7, 1)).resolves.toBeUndefined();
+      expect(itemRepo.update).toHaveBeenCalledWith(
+        { todoListId: 1 },
+        { done: true },
+      );
     });
 
     it('throws NotFoundException when the todo list has no items', async () => {
-      repo.update.mockResolvedValue({ affected: 0 });
-      await expect(service.markAllDone(999)).rejects.toThrow(NotFoundException);
+      itemRepo.update.mockResolvedValue({ affected: 0 });
+      await expect(service.markAllDone(7, 999)).rejects.toThrow(NotFoundException);
     });
   });
 });

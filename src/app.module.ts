@@ -1,14 +1,19 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ConfigModule } from '@nestjs/config';
 import { TodoListsModule } from './todo_lists/todo_lists.module';
 import { ListItemsModule } from './list_items/list_items.module';
+import { AuthModule } from './auth/auth.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TodoList } from './todo_lists/todo_list.entity';
 import { ListItem } from './list_items/list_item.entity';
+import { User } from './users/user.entity';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
     TodoListsModule,
     ListItemsModule,
     TypeOrmModule.forRoot({
@@ -18,7 +23,7 @@ import { ListItem } from './list_items/list_item.entity';
       username: process.env.DB_USERNAME ?? 'postgres',
       password: process.env.DB_PASSWORD ?? 'postgres',
       database: process.env.DB_DATABASE ?? 'nestjs_db',
-      entities: [TodoList, ListItem],
+      entities: [TodoList, ListItem, User],
       synchronize: true,
       // ponytail: errors+warnings only; `true` drowns request logs in SQL
       logging: ['error', 'warn'],

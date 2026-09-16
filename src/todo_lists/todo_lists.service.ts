@@ -12,33 +12,58 @@ export class TodoListsService {
     private readonly todoListRepository: Repository<TodoList>,
   ) {}
 
-  async all(): Promise<TodoList[]> {
-    return await this.todoListRepository.find();
+  // every read/write is scoped to a user — defense in depth on top of the guard
+  private ownedWhere(userId: number) {
+    return { userId } as const;
   }
 
-  async get(id: number): Promise<TodoList> {
-    const todoList = await this.todoListRepository.findOneBy({ id });
+  async all(userId: number): Promise<TodoList[]> {
+    return await this.todoListRepository.find({
+      where: this.ownedWhere(userId),
+    });
+  }
+
+  async get(userId: number, id: number): Promise<TodoList> {
+    const todoList = await this.todoListRepository.findOne({
+      where: { id, userId },
+    });
     if (!todoList) {
       throw new NotFoundException(`Todo list ${id} not found`);
     }
     return todoList;
   }
 
-  async create(dto: CreateTodoListDto): Promise<TodoList> {
-    const todoList = this.todoListRepository.create({ name: dto.name });
+  async create(
+    userId: number,
+    dto: CreateTodoListDto,
+  ): Promise<TodoList> {
+    const todoList = this.todoListRepository.create({
+      name: dto.name,
+      userId,
+    });
     return await this.todoListRepository.save(todoList);
   }
 
-  async update(id: number, dto: UpdateTodoListDto): Promise<TodoList> {
-    const { affected } = await this.todoListRepository.update(id, dto);
+  async update(
+    userId: number,
+    id: number,
+    dto: UpdateTodoListDto,
+  ): Promise<TodoList> {
+    const { affected } = await this.todoListRepository.update(
+      { id, userId },
+      dto,
+    );
     if (!affected) {
       throw new NotFoundException(`Todo list ${id} not found`);
     }
-    return this.get(id);
+    return this.get(userId, id);
   }
 
-  async delete(id: number): Promise<void> {
-    const { affected } = await this.todoListRepository.delete(id);
+  async delete(userId: number, id: number): Promise<void> {
+    const { affected } = await this.todoListRepository.delete({
+      id,
+      userId,
+    });
     if (!affected) {
       throw new NotFoundException(`Todo list ${id} not found`);
     }

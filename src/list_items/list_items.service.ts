@@ -4,20 +4,31 @@ import { UpdateListItemDto } from './dtos/update-list-item';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ListItem } from './list_item.entity';
+import { TodoList } from '../todo_lists/todo_list.entity';
 
 @Injectable()
 export class ListItemsService {
   constructor(
     @InjectRepository(ListItem)
     private readonly listItemRepository: Repository<ListItem>,
+    @InjectRepository(TodoList)
+    private readonly todoListRepository: Repository<TodoList>,
   ) {}
 
-  async all(todoListId: number): Promise<ListItem[]> {
-    return await this.listItemRepository.find({ where: { todoListId } });
+  async all(userId: number, todoListId: number): Promise<ListItem[]> {
+    return await this.listItemRepository.find({
+      where: { todoListId, todoList: { userId } },
+    });
   }
 
-  async get(todoListId: number, id: number): Promise<ListItem> {
-    const item = await this.listItemRepository.findOneBy({ id, todoListId });
+  async get(
+    userId: number,
+    todoListId: number,
+    id: number,
+  ): Promise<ListItem> {
+    const item = await this.listItemRepository.findOne({
+      where: { id, todoListId, todoList: { userId } },
+    });
     if (!item) {
       throw new NotFoundException(
         `List item ${id} not found in todo list ${todoListId}`,
@@ -26,12 +37,23 @@ export class ListItemsService {
     return item;
   }
 
-  async create(todoListId: number, dto: CreateListItemDto): Promise<ListItem> {
+  async create(
+    userId: number,
+    todoListId: number,
+    dto: CreateListItemDto,
+  ): Promise<ListItem> {
+    const list = await this.todoListRepository.findOne({
+      where: { id: todoListId, userId },
+    });
+    if (!list) {
+      throw new NotFoundException(`Todo list ${todoListId} not found`);
+    }
     const item = this.listItemRepository.create({ ...dto, todoListId });
     return await this.listItemRepository.save(item);
   }
 
   async update(
+    userId: number,
     todoListId: number,
     id: number,
     dto: UpdateListItemDto,
@@ -45,10 +67,14 @@ export class ListItemsService {
         `List item ${id} not found in todo list ${todoListId}`,
       );
     }
-    return this.get(todoListId, id);
+    return this.get(userId, todoListId, id);
   }
 
-  async delete(todoListId: number, id: number): Promise<void> {
+  async delete(
+    userId: number,
+    todoListId: number,
+    id: number,
+  ): Promise<void> {
     const { affected } = await this.listItemRepository.delete({
       id,
       todoListId,
@@ -60,8 +86,7 @@ export class ListItemsService {
     }
   }
 
-  async markAllDone(todoListId: number): Promise<void> {
-    // Single bulk UPDATE — one round trip no matter how many items the list has
+  async markAllDone(userId: number, todoListId: number): Promise<void> {
     const { affected } = await this.listItemRepository.update(
       { todoListId },
       { done: true },
