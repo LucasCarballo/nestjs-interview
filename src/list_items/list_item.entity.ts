@@ -1,16 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-import { ListItem } from '../list_items/list_item.entity';
 
 @Entity()
-export class TodoList {
+export class ListItem {
   @ApiProperty({ example: 1 })
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ApiProperty({ example: 'Shopping List' })
+  @ApiProperty({ example: 'Buy milk' })
   @Column()
-  name: string;
+  value: string;
 
-  items: ListItem[];
+  @ApiProperty({ example: 1 })
+  @Column()
+  todoListId: number;
 }
