@@ -13,7 +13,6 @@ import { CreateTodoListDto } from './dtos/create-todo_list';
 import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { TodoList } from './todo_list.entity';
 import { TodoListsService } from './todo_lists.service';
-import { ListItemsService } from '../list_items/list_items.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TodoListOwnershipGuard } from '../auth/ownership.guard';
 import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
@@ -23,20 +22,16 @@ import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('api/todolists')
 export class TodoListsController {
-  constructor(
-    private todoListsService: TodoListsService,
-    private listItemsService: ListItemsService,
-  ) {}
+  constructor(private todoListsService: TodoListsService) {}
 
-  // No :todoListId in this route — JWT-only is enough, but service still filters by userId.
-  @ApiOperation({ summary: 'List all of my todo lists' })
+  @ApiOperation({ summary: 'List all of my todo lists (each with its items)' })
   @Get()
   index(@CurrentUser() user: AuthUser): Promise<TodoList[]> {
     return this.todoListsService.all(user.userId);
   }
 
-  @ApiOperation({ summary: 'Get one of my todo lists' })
-  @UseGuards(TodoListOwnershipGuard) // needs :todoListId
+  @ApiOperation({ summary: 'Get one of my todo lists (with its items)' })
+  @UseGuards(TodoListOwnershipGuard)
   @Get('/:todoListId')
   show(
     @CurrentUser() user: AuthUser,
@@ -69,17 +64,7 @@ export class TodoListsController {
     );
   }
 
-  @ApiOperation({ summary: 'Mark all items of one of my todo lists as done' })
-  @UseGuards(TodoListOwnershipGuard)
-  @Put('/:todoListId/done')
-  markDone(
-    @CurrentUser() user: AuthUser,
-    @Param() param: { todoListId: number },
-  ): Promise<void> {
-    return this.listItemsService.markAllDone(user.userId, param.todoListId);
-  }
-
-  @ApiOperation({ summary: 'Delete one of my todo lists' })
+  @ApiOperation({ summary: 'Delete one of my todo lists (cascades to items)' })
   @UseGuards(TodoListOwnershipGuard)
   @Delete('/:todoListId')
   delete(

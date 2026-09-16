@@ -12,7 +12,6 @@ describe('ListItemsService', () => {
 
   beforeEach(async () => {
     itemRepo = {
-      find: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
@@ -32,33 +31,6 @@ describe('ListItemsService', () => {
     }).compile();
 
     service = module.get<ListItemsService>(ListItemsService);
-  });
-
-  describe('all', () => {
-    it('returns items in one of my todo lists', async () => {
-      const items = [{ id: 1, value: 'Buy milk', todoListId: 1 }];
-      itemRepo.find.mockResolvedValue(items);
-      await expect(service.all(7, 1)).resolves.toEqual(items);
-      expect(itemRepo.find).toHaveBeenCalledWith({
-        where: { todoListId: 1, todoList: { userId: 7 } },
-      });
-    });
-  });
-
-  describe('get', () => {
-    it('returns the item when I own the parent list', async () => {
-      const item = { id: 1, value: 'Buy milk', todoListId: 1 };
-      itemRepo.findOne.mockResolvedValue(item);
-      await expect(service.get(7, 1, 1)).resolves.toEqual(item);
-      expect(itemRepo.findOne).toHaveBeenCalledWith({
-        where: { id: 1, todoListId: 1, todoList: { userId: 7 } },
-      });
-    });
-
-    it('throws NotFoundException when the item is missing or not mine', async () => {
-      itemRepo.findOne.mockResolvedValue(null);
-      await expect(service.get(7, 1, 999)).rejects.toThrow(NotFoundException);
-    });
   });
 
   describe('create', () => {
@@ -85,9 +57,9 @@ describe('ListItemsService', () => {
   });
 
   describe('update', () => {
-    it('updates an existing item and returns it', async () => {
-      const dto = { value: 'Buy oat milk' };
-      const updated = { id: 1, value: 'Buy oat milk', todoListId: 1 };
+    it('updates an item and returns it', async () => {
+      const dto = { done: true };
+      const updated = { id: 1, value: 'Buy milk', todoListId: 1, done: true };
       itemRepo.update.mockResolvedValue({ affected: 1 });
       itemRepo.findOne.mockResolvedValue(updated);
       await expect(service.update(7, 1, 1, dto)).resolves.toEqual(updated);

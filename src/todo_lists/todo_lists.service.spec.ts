@@ -6,13 +6,13 @@ import { TodoList } from './todo_list.entity';
 
 describe('TodoListsService', () => {
   let service: TodoListsService;
-  let repo: jest.Mocked<Record<string, jest.Mock>>;
+  let todoRepo: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
-    repo = {
+    todoRepo = {
       find: jest.fn(),
-      findOneBy: jest.fn(),
       findOne: jest.fn(),
+      findOneBy: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
@@ -22,7 +22,7 @@ describe('TodoListsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TodoListsService,
-        { provide: getRepositoryToken(TodoList), useValue: repo },
+        { provide: getRepositoryToken(TodoList), useValue: todoRepo },
       ],
     }).compile();
 
@@ -30,52 +30,67 @@ describe('TodoListsService', () => {
   });
 
   describe('all', () => {
-    it('returns all of my todo lists', async () => {
-      const lists = [{ id: 1, name: 'Shopping List', userId: 7 }];
-      repo.find.mockResolvedValue(lists);
+    it('returns all of my todo lists, with items eager-loaded', async () => {
+      const lists = [{ id: 1, name: 'Shopping List', userId: 7, items: [] }];
+      todoRepo.find.mockResolvedValue(lists);
       await expect(service.all(7)).resolves.toEqual(lists);
-      expect(repo.find).toHaveBeenCalledWith({ where: { userId: 7 } });
+      expect(todoRepo.find).toHaveBeenCalledWith({
+        where: { userId: 7 },
+        relations: ['items'],
+      });
     });
   });
 
   describe('get', () => {
-    it('returns the todo list when I own it', async () => {
-      const list = { id: 1, name: 'Shopping List', userId: 7 };
-      repo.findOne.mockResolvedValue(list);
+    it('returns one of my todo lists with items eager-loaded', async () => {
+      const list = { id: 1, name: 'Shopping List', userId: 7, items: [] };
+      todoRepo.findOne.mockResolvedValue(list);
       await expect(service.get(7, 1)).resolves.toEqual(list);
-      expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 1, userId: 7 } });
+      expect(todoRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 1, userId: 7 },
+        relations: ['items'],
+      });
     });
 
     it('throws NotFoundException when the list is not mine or missing', async () => {
-      repo.findOne.mockResolvedValue(null);
+      todoRepo.findOne.mockResolvedValue(null);
       await expect(service.get(7, 999)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('create', () => {
-    it('creates and saves a todo list owned by me', async () => {
+    it('creates a list, owned by me, and returns it with an empty items array', async () => {
       const dto = { name: 'New List' };
-      const saved = { id: 1, name: 'New List', userId: 7 };
-      repo.create.mockReturnValue(saved);
-      repo.save.mockResolvedValue(saved);
-      await expect(service.create(7, dto)).resolves.toEqual(saved);
-      expect(repo.create).toHaveBeenCalledWith({ name: dto.name, userId: 7 });
-      expect(repo.save).toHaveBeenCalledWith(saved);
+      const created = { id: 1, name: 'New List', userId: 7 };
+      todoRepo.create.mockReturnValue(created);
+      todoRepo.save.mockResolvedValue(created);
+      const result = await service.create(7, dto);
+      expect(result).toEqual({ ...created, items: [] });
+      expect(todoRepo.create).toHaveBeenCalledWith({
+        name: dto.name,
+        userId: 7,
+      });
+      expect(todoRepo.save).toHaveBeenCalledWith(created);
     });
   });
 
   describe('update', () => {
-    it('updates an existing todo list and returns it', async () => {
+    it('updates an existing todo list and returns it with items', async () => {
       const dto = { name: 'Updated List' };
-      const updated = { id: 1, name: 'Updated List', userId: 7 };
-      repo.update.mockResolvedValue({ affected: 1 });
-      repo.findOne.mockResolvedValue(updated);
+      const updated = {
+        id: 1,
+        name: 'Updated List',
+        userId: 7,
+        items: [],
+      };
+      todoRepo.update.mockResolvedValue({ affected: 1 });
+      todoRepo.findOne.mockResolvedValue(updated);
       await expect(service.update(7, 1, dto)).resolves.toEqual(updated);
-      expect(repo.update).toHaveBeenCalledWith({ id: 1, userId: 7 }, dto);
+      expect(todoRepo.update).toHaveBeenCalledWith({ id: 1, userId: 7 }, dto);
     });
 
     it('throws NotFoundException when nothing was updated', async () => {
-      repo.update.mockResolvedValue({ affected: 0 });
+      todoRepo.update.mockResolvedValue({ affected: 0 });
       await expect(service.update(7, 999, { name: 'x' })).rejects.toThrow(
         NotFoundException,
       );
@@ -84,13 +99,13 @@ describe('TodoListsService', () => {
 
   describe('delete', () => {
     it('deletes one of my todo lists', async () => {
-      repo.delete.mockResolvedValue({ affected: 1 });
+      todoRepo.delete.mockResolvedValue({ affected: 1 });
       await expect(service.delete(7, 1)).resolves.toBeUndefined();
-      expect(repo.delete).toHaveBeenCalledWith({ id: 1, userId: 7 });
+      expect(todoRepo.delete).toHaveBeenCalledWith({ id: 1, userId: 7 });
     });
 
     it('throws NotFoundException when nothing was deleted', async () => {
-      repo.delete.mockResolvedValue({ affected: 0 });
+      todoRepo.delete.mockResolvedValue({ affected: 0 });
       await expect(service.delete(7, 999)).rejects.toThrow(NotFoundException);
     });
   });

@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { TodoListsController } from './todo_lists.controller';
 import { TodoListsService } from './todo_lists.service';
-import { ListItemsService } from '../list_items/list_items.service';
 import { AuthUser } from '../auth/current-user.decorator';
 
 const user: AuthUser = { userId: 7, email: 'ada@example.com' };
@@ -10,7 +9,6 @@ const user: AuthUser = { userId: 7, email: 'ada@example.com' };
 describe('TodoListsController', () => {
   let controller: TodoListsController;
   let service: jest.Mocked<Record<string, jest.Mock>>;
-  let listItemsService: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
     service = {
@@ -20,25 +18,15 @@ describe('TodoListsController', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    listItemsService = {
-      markAllDone: jest.fn(),
-    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TodoListsController],
-      providers: [
-        { provide: TodoListsService, useValue: service },
-        { provide: ListItemsService, useValue: listItemsService },
-      ],
+      providers: [{ provide: TodoListsService, useValue: service }],
     })
       .overrideGuard(require('../auth/jwt-auth.guard').JwtAuthGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(
         require('../auth/ownership.guard').TodoListOwnershipGuard,
-      )
-      .useValue({ canActivate: () => true })
-      .overrideGuard(
-        require('../auth/ownership.guard').ListItemOwnershipGuard,
       )
       .useValue({ canActivate: () => true })
       .compile();
@@ -48,9 +36,8 @@ describe('TodoListsController', () => {
 
   describe('index', () => {
     it('delegates to service.all with the authenticated user', async () => {
-      const lists = [{ id: 1, name: 'Shopping List' }];
+      const lists = [{ id: 1, name: 'Shopping List', items: [] }];
       service.all.mockResolvedValue(lists);
-
       await expect(controller.index(user)).resolves.toEqual(lists);
       expect(service.all).toHaveBeenCalledWith(7);
     });
@@ -58,9 +45,8 @@ describe('TodoListsController', () => {
 
   describe('show', () => {
     it('delegates to service.get with userId and id', async () => {
-      const list = { id: 1, name: 'Shopping List' };
+      const list = { id: 1, name: 'Shopping List', items: [] };
       service.get.mockResolvedValue(list);
-
       await expect(
         controller.show(user, { todoListId: 1 }),
       ).resolves.toEqual(list);
@@ -78,9 +64,8 @@ describe('TodoListsController', () => {
   describe('create', () => {
     it('delegates to service.create with the user and body', async () => {
       const dto = { name: 'New List' };
-      const created = { id: 1, name: 'New List' };
+      const created = { id: 1, name: 'New List', items: [] };
       service.create.mockResolvedValue(created);
-
       await expect(controller.create(user, dto)).resolves.toEqual(created);
       expect(service.create).toHaveBeenCalledWith(7, dto);
     });
@@ -89,9 +74,8 @@ describe('TodoListsController', () => {
   describe('update', () => {
     it('delegates to service.update converting the id to a number', async () => {
       const dto = { name: 'Updated List' };
-      const updated = { id: 1, name: 'Updated List' };
+      const updated = { id: 1, name: 'Updated List', items: [] };
       service.update.mockResolvedValue(updated);
-
       await expect(
         controller.update(user, { todoListId: '1' }, dto),
       ).resolves.toEqual(updated);
@@ -102,22 +86,10 @@ describe('TodoListsController', () => {
   describe('delete', () => {
     it('delegates to service.delete with userId and id', async () => {
       service.delete.mockResolvedValue(undefined);
-
       await expect(
         controller.delete(user, { todoListId: 1 }),
       ).resolves.toBeUndefined();
       expect(service.delete).toHaveBeenCalledWith(7, 1);
-    });
-  });
-
-  describe('markDone', () => {
-    it('delegates to listItemsService.markAllDone with userId and id', async () => {
-      listItemsService.markAllDone.mockResolvedValue(undefined);
-
-      await expect(
-        controller.markDone(user, { todoListId: 1 }),
-      ).resolves.toBeUndefined();
-      expect(listItemsService.markAllDone).toHaveBeenCalledWith(7, 1);
     });
   });
 });

@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateListItemDto } from './dtos/create-list-item';
-import { UpdateListItemDto } from './dtos/update-list-item';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateListItemDto } from './dtos/create-list-item';
+import { UpdateListItemDto } from './dtos/update-list-item';
 import { ListItem } from './list_item.entity';
 import { TodoList } from '../todo_lists/todo_list.entity';
 
@@ -14,28 +14,6 @@ export class ListItemsService {
     @InjectRepository(TodoList)
     private readonly todoListRepository: Repository<TodoList>,
   ) {}
-
-  async all(userId: number, todoListId: number): Promise<ListItem[]> {
-    return await this.listItemRepository.find({
-      where: { todoListId, todoList: { userId } },
-    });
-  }
-
-  async get(
-    userId: number,
-    todoListId: number,
-    id: number,
-  ): Promise<ListItem> {
-    const item = await this.listItemRepository.findOne({
-      where: { id, todoListId, todoList: { userId } },
-    });
-    if (!item) {
-      throw new NotFoundException(
-        `List item ${id} not found in todo list ${todoListId}`,
-      );
-    }
-    return item;
-  }
 
   async create(
     userId: number,
@@ -58,6 +36,8 @@ export class ListItemsService {
     id: number,
     dto: UpdateListItemDto,
   ): Promise<ListItem> {
+    // OwnershipGuard already verified the parent list; the WHERE on id+todoListId
+    // is the second line of defense in case the guard is bypassed.
     const { affected } = await this.listItemRepository.update(
       { id, todoListId },
       dto,
@@ -67,7 +47,15 @@ export class ListItemsService {
         `List item ${id} not found in todo list ${todoListId}`,
       );
     }
-    return this.get(userId, todoListId, id);
+    const item = await this.listItemRepository.findOne({
+      where: { id, todoListId },
+    });
+    if (!item) {
+      throw new NotFoundException(
+        `List item ${id} not found in todo list ${todoListId}`,
+      );
+    }
+    return item;
   }
 
   async delete(
@@ -86,7 +74,11 @@ export class ListItemsService {
     }
   }
 
-  async markAllDone(userId: number, todoListId: number): Promise<void> {
+  async markAllDone(
+    userId: number,
+    todoListId: number,
+  ): Promise<void> {
+    // Bulk UPDATE — one round trip no matter how many items the list has.
     const { affected } = await this.listItemRepository.update(
       { todoListId },
       { done: true },

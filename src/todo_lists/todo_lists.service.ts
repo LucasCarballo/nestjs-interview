@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateTodoListDto } from './dtos/create-todo_list';
-import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateTodoListDto } from './dtos/create-todo_list';
+import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { TodoList } from './todo_list.entity';
 
 @Injectable()
@@ -20,12 +20,14 @@ export class TodoListsService {
   async all(userId: number): Promise<TodoList[]> {
     return await this.todoListRepository.find({
       where: this.ownedWhere(userId),
+      relations: ['items'],
     });
   }
 
   async get(userId: number, id: number): Promise<TodoList> {
     const todoList = await this.todoListRepository.findOne({
       where: { id, userId },
+      relations: ['items'],
     });
     if (!todoList) {
       throw new NotFoundException(`Todo list ${id} not found`);
@@ -41,7 +43,9 @@ export class TodoListsService {
       name: dto.name,
       userId,
     });
-    return await this.todoListRepository.save(todoList);
+    const saved = await this.todoListRepository.save(todoList);
+    // newly created lists have no items; return the same shape as get()
+    return { ...saved, items: [] };
   }
 
   async update(
