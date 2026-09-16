@@ -2,9 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { TodoListsController } from './todo_lists.controller';
 import { TodoListsService } from './todo_lists.service';
-import { AuthUser } from '../auth/current-user.decorator';
-
-const user: AuthUser = { userId: 7, email: 'ada@example.com' };
 
 describe('TodoListsController', () => {
   let controller: TodoListsController;
@@ -23,8 +20,6 @@ describe('TodoListsController', () => {
       controllers: [TodoListsController],
       providers: [{ provide: TodoListsService, useValue: service }],
     })
-      .overrideGuard(require('../auth/jwt-auth.guard').JwtAuthGuard)
-      .useValue({ canActivate: () => true })
       .overrideGuard(
         require('../auth/ownership.guard').TodoListOwnershipGuard,
       )
@@ -35,39 +30,39 @@ describe('TodoListsController', () => {
   });
 
   describe('index', () => {
-    it('delegates to service.all with the authenticated user', async () => {
+    it('delegates to service.all', async () => {
       const lists = [{ id: 1, name: 'Shopping List', items: [] }];
       service.all.mockResolvedValue(lists);
-      await expect(controller.index(user)).resolves.toEqual(lists);
-      expect(service.all).toHaveBeenCalledWith(7);
+      await expect(controller.index()).resolves.toEqual(lists);
+      expect(service.all).toHaveBeenCalledWith();
     });
   });
 
   describe('show', () => {
-    it('delegates to service.get with userId and id', async () => {
+    it('delegates to service.get with the id', async () => {
       const list = { id: 1, name: 'Shopping List', items: [] };
       service.get.mockResolvedValue(list);
       await expect(
-        controller.show(user, { todoListId: 1 }),
+        controller.show({ todoListId: 1 }),
       ).resolves.toEqual(list);
-      expect(service.get).toHaveBeenCalledWith(7, 1);
+      expect(service.get).toHaveBeenCalledWith(1);
     });
 
     it('propagates NotFoundException from the service', async () => {
       service.get.mockRejectedValue(new NotFoundException());
       await expect(
-        controller.show(user, { todoListId: 999 }),
+        controller.show({ todoListId: 999 }),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('create', () => {
-    it('delegates to service.create with the user and body', async () => {
+    it('delegates to service.create with the body', async () => {
       const dto = { name: 'New List' };
       const created = { id: 1, name: 'New List', items: [] };
       service.create.mockResolvedValue(created);
-      await expect(controller.create(user, dto)).resolves.toEqual(created);
-      expect(service.create).toHaveBeenCalledWith(7, dto);
+      await expect(controller.create(dto)).resolves.toEqual(created);
+      expect(service.create).toHaveBeenCalledWith(dto);
     });
   });
 
@@ -77,19 +72,19 @@ describe('TodoListsController', () => {
       const updated = { id: 1, name: 'Updated List', items: [] };
       service.update.mockResolvedValue(updated);
       await expect(
-        controller.update(user, { todoListId: '1' }, dto),
+        controller.update({ todoListId: '1' }, dto),
       ).resolves.toEqual(updated);
-      expect(service.update).toHaveBeenCalledWith(7, 1, dto);
+      expect(service.update).toHaveBeenCalledWith(1, dto);
     });
   });
 
   describe('delete', () => {
-    it('delegates to service.delete with userId and id', async () => {
+    it('delegates to service.delete', async () => {
       service.delete.mockResolvedValue(undefined);
       await expect(
-        controller.delete(user, { todoListId: 1 }),
+        controller.delete({ todoListId: 1 }),
       ).resolves.toBeUndefined();
-      expect(service.delete).toHaveBeenCalledWith(7, 1);
+      expect(service.delete).toHaveBeenCalledWith(1);
     });
   });
 });

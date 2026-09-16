@@ -16,12 +16,11 @@ export class ListItemsService {
   ) {}
 
   async create(
-    userId: number,
     todoListId: number,
     dto: CreateListItemDto,
   ): Promise<ListItem> {
     const list = await this.todoListRepository.findOne({
-      where: { id: todoListId, userId },
+      where: { id: todoListId },
     });
     if (!list) {
       throw new NotFoundException(`Todo list ${todoListId} not found`);
@@ -31,13 +30,10 @@ export class ListItemsService {
   }
 
   async update(
-    userId: number,
     todoListId: number,
     id: number,
     dto: UpdateListItemDto,
   ): Promise<ListItem> {
-    // OwnershipGuard already verified the parent list; the WHERE on id+todoListId
-    // is the second line of defense in case the guard is bypassed.
     const { affected } = await this.listItemRepository.update(
       { id, todoListId },
       dto,
@@ -58,11 +54,7 @@ export class ListItemsService {
     return item;
   }
 
-  async delete(
-    userId: number,
-    todoListId: number,
-    id: number,
-  ): Promise<void> {
+  async delete(todoListId: number, id: number): Promise<void> {
     const { affected } = await this.listItemRepository.delete({
       id,
       todoListId,
@@ -74,10 +66,7 @@ export class ListItemsService {
     }
   }
 
-  async markAllDone(
-    userId: number,
-    todoListId: number,
-  ): Promise<void> {
+  async markAllDone(todoListId: number): Promise<void> {
     // Bulk UPDATE — one round trip no matter how many items the list has.
     const { affected } = await this.listItemRepository.update(
       { todoListId },

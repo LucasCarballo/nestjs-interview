@@ -8,10 +8,9 @@ import {
   TodoListOwnershipGuard,
   ListItemOwnershipGuard,
 } from '../auth/ownership.guard';
-import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ListItem, TodoList]), AuthModule],
+  imports: [TypeOrmModule.forFeature([ListItem, TodoList])],
   controllers: [ListItemsController],
   providers: [ListItemsService, TodoListOwnershipGuard, ListItemOwnershipGuard],
   exports: [ListItemsService],

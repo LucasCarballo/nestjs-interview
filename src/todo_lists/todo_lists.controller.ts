@@ -8,69 +8,51 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CreateTodoListDto } from './dtos/create-todo_list';
 import { UpdateTodoListDto } from './dtos/update-todo_list';
 import { TodoList } from './todo_list.entity';
 import { TodoListsService } from './todo_lists.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TodoListOwnershipGuard } from '../auth/ownership.guard';
-import { AuthUser, CurrentUser } from '../auth/current-user.decorator';
 
 @ApiTags('todo-lists')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('api/todolists')
 export class TodoListsController {
   constructor(private todoListsService: TodoListsService) {}
 
-  @ApiOperation({ summary: 'List all of my todo lists (each with its items)' })
+  @ApiOperation({ summary: 'List all todo lists (each with its items)' })
   @Get()
-  index(@CurrentUser() user: AuthUser): Promise<TodoList[]> {
-    return this.todoListsService.all(user.userId);
+  index(): Promise<TodoList[]> {
+    return this.todoListsService.all();
   }
 
-  @ApiOperation({ summary: 'Get one of my todo lists (with its items)' })
+  @ApiOperation({ summary: 'Get one todo list (with its items)' })
   @UseGuards(TodoListOwnershipGuard)
   @Get('/:todoListId')
-  show(
-    @CurrentUser() user: AuthUser,
-    @Param() param: { todoListId: number },
-  ): Promise<TodoList> {
-    return this.todoListsService.get(user.userId, param.todoListId);
+  show(@Param() param: { todoListId: number }): Promise<TodoList> {
+    return this.todoListsService.get(param.todoListId);
   }
 
-  @ApiOperation({ summary: 'Create a todo list owned by me' })
+  @ApiOperation({ summary: 'Create a todo list' })
   @Post()
-  create(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: CreateTodoListDto,
-  ): Promise<TodoList> {
-    return this.todoListsService.create(user.userId, dto);
+  create(@Body() dto: CreateTodoListDto): Promise<TodoList> {
+    return this.todoListsService.create(dto);
   }
 
-  @ApiOperation({ summary: 'Update one of my todo lists' })
+  @ApiOperation({ summary: 'Update a todo list' })
   @UseGuards(TodoListOwnershipGuard)
   @Put('/:todoListId')
   update(
-    @CurrentUser() user: AuthUser,
     @Param() param: { todoListId: string },
     @Body() dto: UpdateTodoListDto,
   ): Promise<TodoList> {
-    return this.todoListsService.update(
-      user.userId,
-      Number(param.todoListId),
-      dto,
-    );
+    return this.todoListsService.update(Number(param.todoListId), dto);
   }
 
-  @ApiOperation({ summary: 'Delete one of my todo lists (cascades to items)' })
+  @ApiOperation({ summary: 'Delete a todo list (cascades to items)' })
   @UseGuards(TodoListOwnershipGuard)
   @Delete('/:todoListId')
-  delete(
-    @CurrentUser() user: AuthUser,
-    @Param() param: { todoListId: number },
-  ): Promise<void> {
-    return this.todoListsService.delete(user.userId, param.todoListId);
+  delete(@Param() param: { todoListId: number }): Promise<void> {
+    return this.todoListsService.delete(param.todoListId);
   }
 }

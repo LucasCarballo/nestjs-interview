@@ -1,7 +1,6 @@
 import {
   CanActivate,
   ExecutionContext,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,26 +20,20 @@ export class TodoListOwnershipGuard implements CanActivate {
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest();
-    const userId = req.user?.userId;
-    if (!userId) {
-      throw new ForbiddenException('Not authenticated');
-    }
     const todoListId = Number(req.params.todoListId);
     if (!todoListId) {
       throw new NotFoundException('Missing todoListId');
     }
     const list = await this.todoListRepo.findOneBy({ id: todoListId });
-    // Missing list OR wrong owner both surface as 404 — don't leak existence.
-    if (!list || list.userId !== userId) {
+    if (!list) {
       throw new NotFoundException(`Todo list ${todoListId} not found`);
     }
     return true;
   }
 }
 
-// Owns the per-item check. Needs both repos: the parent list for ownership
-// and the item itself to confirm it exists under that list. Lives in
-// ListItemsModule where both repos are registered.
+// Owns the per-item check. Needs both repos: the parent list and the item
+// itself. Lives in ListItemsModule where both repos are registered.
 @Injectable()
 export class ListItemOwnershipGuard implements CanActivate {
   constructor(
@@ -51,19 +44,17 @@ export class ListItemOwnershipGuard implements CanActivate {
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const req = ctx.switchToHttp().getRequest();
-    const userId = req.user?.userId;
-    if (!userId) {
-      throw new ForbiddenException('Not authenticated');
-    }
-    const params = req.params as Record<string, string>;
+    const params = ctx.switchToHttp().getRequest().params as Record<
+      string,
+      string
+    >;
     const todoListId = Number(params.todoListId);
     const itemId = Number(params.itemId ?? params.listItemId);
     if (!todoListId || !itemId) {
       throw new NotFoundException('Missing todoListId or itemId');
     }
     const list = await this.todoListRepo.findOneBy({ id: todoListId });
-    if (!list || list.userId !== userId) {
+    if (!list) {
       throw new NotFoundException(`Todo list ${todoListId} not found`);
     }
     const item = await this.listItemRepo.findOneBy({

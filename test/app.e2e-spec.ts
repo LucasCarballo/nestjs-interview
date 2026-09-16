@@ -7,15 +7,8 @@ import { AppModule } from './../src/app.module';
 // Don't let the global throttler guard trip tests on repeated runs
 process.env.THROTTLE_LIMIT = '10000';
 
-const uniqueEmail = `e2e-${Date.now()}@example.com`;
-const password = 'hunter2';
-
 describe('Todo API (e2e)', () => {
   let app: INestApplication;
-  let token: string;
-
-  const authed = (chain: request.Test) =>
-    chain.set('Authorization', `Bearer ${token}`);
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -35,12 +28,6 @@ describe('Todo API (e2e)', () => {
     SwaggerModule.setup('api/docs', app, document);
 
     await app.init();
-
-    const signup = await request(app.getHttpServer())
-      .post('/api/auth/signup')
-      .send({ email: uniqueEmail, password })
-      .expect(201);
-    token = signup.body.access_token;
   });
 
   afterAll(async () => {
@@ -52,220 +39,171 @@ describe('Todo API (e2e)', () => {
   });
 
   it('lists, creates, fetches and deletes a todo list (with items nested)', async () => {
-    // Initially empty for this user
-    const empty = await authed(
-      request(app.getHttpServer()).get('/api/todolists'),
-    ).expect(200);
+    const empty = await request(app.getHttpServer())
+      .get('/api/todolists')
+      .expect(200);
     expect(Array.isArray(empty.body)).toBe(true);
 
-    // Create
-    const created = await authed(
-      request(app.getHttpServer()).post('/api/todolists'),
-    )
+    const created = await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: 'e2e list' })
       .expect(201);
     expect(created.body.id).toBeDefined();
     expect(created.body.name).toBe('e2e list');
     expect(created.body.items).toEqual([]);
 
-    // Fetch by id — items array is included
-    const fetched = await authed(
-      request(app.getHttpServer()).get(`/api/todolists/${created.body.id}`),
-    ).expect(200);
+    const fetched = await request(app.getHttpServer())
+      .get(`/api/todolists/${created.body.id}`)
+      .expect(200);
     expect(fetched.body.name).toBe('e2e list');
     expect(Array.isArray(fetched.body.items)).toBe(true);
 
-    // Update
-    const updated = await authed(
-      request(app.getHttpServer()).put(`/api/todolists/${created.body.id}`),
-    )
+    const updated = await request(app.getHttpServer())
+      .put(`/api/todolists/${created.body.id}`)
       .send({ name: 'e2e list renamed' })
       .expect(200);
     expect(updated.body.name).toBe('e2e list renamed');
 
-    // Delete
-    await authed(
-      request(app.getHttpServer()).delete(`/api/todolists/${created.body.id}`),
-    ).expect(200);
+    await request(app.getHttpServer())
+      .delete(`/api/todolists/${created.body.id}`)
+      .expect(200);
   });
 
   it('returns 404 for missing resources', async () => {
-    await authed(
-      request(app.getHttpServer()).get('/api/todolists/999999'),
-    ).expect(404);
-    await authed(request(app.getHttpServer()).put('/api/todolists/999999'))
+    await request(app.getHttpServer()).get('/api/todolists/999999').expect(404);
+    await request(app.getHttpServer())
+      .put('/api/todolists/999999')
       .send({ name: 'nope' })
       .expect(404);
-    await authed(
-      request(app.getHttpServer()).delete('/api/todolists/999999'),
-    ).expect(404);
+    await request(app.getHttpServer())
+      .delete('/api/todolists/999999')
+      .expect(404);
   });
 
   it('rejects invalid payloads', async () => {
-    await authed(request(app.getHttpServer()).post('/api/todolists'))
+    await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({})
       .expect(400);
-    await authed(request(app.getHttpServer()).post('/api/todolists'))
+    await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: '' })
       .expect(400);
   });
 
-  it('rejects unauthenticated requests with 401', async () => {
-    await request(app.getHttpServer()).get('/api/todolists').expect(401);
-    await request(app.getHttpServer())
-      .post('/api/todolists')
-      .send({ name: 'no auth' })
-      .expect(401);
-  });
-
   it('deleting a todo list cascades to its items', async () => {
-    const list = await authed(
-      request(app.getHttpServer()).post('/api/todolists'),
-    )
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: 'cascade list' })
       .expect(201);
 
-    await authed(
-      request(app.getHttpServer()).post(
-        `/api/todolists/${list.body.id}/items`,
-      ),
-    )
+    await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/items`)
       .send({ value: 'Buy milk' })
       .expect(201);
 
-    await authed(
-      request(app.getHttpServer()).delete(`/api/todolists/${list.body.id}`),
-    ).expect(200);
+    await request(app.getHttpServer())
+      .delete(`/api/todolists/${list.body.id}`)
+      .expect(200);
 
-    // The list is gone, and its items are gone with it
-    await authed(
-      request(app.getHttpServer()).get(`/api/todolists/${list.body.id}`),
-    ).expect(404);
+    await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(404);
   });
 
   it('rejects items under a non-existent todo list with 404', async () => {
-    await authed(
-      request(app.getHttpServer()).post('/api/todolists/999999/items'),
-    )
+    await request(app.getHttpServer())
+      .post('/api/todolists/999999/items')
       .send({ value: 'orphan' })
       .expect(404);
   });
 
   it('toggles a single list item via PATCH and reflects it in GET /:id', async () => {
-    const list = await authed(
-      request(app.getHttpServer()).post('/api/todolists'),
-    )
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: 'single done' })
       .expect(201);
 
-    const item = await authed(
-      request(app.getHttpServer()).post(
-        `/api/todolists/${list.body.id}/items`,
-      ),
-    )
+    const item = await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/items`)
       .send({ value: 'Buy milk' })
       .expect(201);
     expect(item.body.done).toBe(false);
 
-    // Invalid done value is rejected
-    await authed(
-      request(app.getHttpServer()).patch(
-        `/api/todolists/${list.body.id}/items/${item.body.id}`,
-      ),
-    )
+    await request(app.getHttpServer())
+      .patch(`/api/todolists/${list.body.id}/items/${item.body.id}`)
       .send({ done: 'yes' })
       .expect(400);
 
-    // Valid toggle
-    const updated = await authed(
-      request(app.getHttpServer()).patch(
-        `/api/todolists/${list.body.id}/items/${item.body.id}`,
-      ),
-    )
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/todolists/${list.body.id}/items/${item.body.id}`)
       .send({ done: true })
       .expect(200);
     expect(updated.body.done).toBe(true);
 
-    // The parent GET reflects the toggle without a second round-trip
-    const refetched = await authed(
-      request(app.getHttpServer()).get(`/api/todolists/${list.body.id}`),
-    ).expect(200);
+    const refetched = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(200);
     expect(refetched.body.items).toHaveLength(1);
     expect(refetched.body.items[0].done).toBe(true);
   });
 
   it('deletes a single item without affecting the list', async () => {
-    const list = await authed(
-      request(app.getHttpServer()).post('/api/todolists'),
-    )
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: 'item delete' })
       .expect(201);
 
-    const item = await authed(
-      request(app.getHttpServer()).post(
-        `/api/todolists/${list.body.id}/items`,
-      ),
-    )
+    const item = await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/items`)
       .send({ value: 'Buy milk' })
       .expect(201);
 
-    await authed(
-      request(app.getHttpServer()).delete(
-        `/api/todolists/${list.body.id}/items/${item.body.id}`,
-      ),
-    ).expect(204);
+    await request(app.getHttpServer())
+      .delete(`/api/todolists/${list.body.id}/items/${item.body.id}`)
+      .expect(204);
 
-    // List still exists, just empty
-    const refetched = await authed(
-      request(app.getHttpServer()).get(`/api/todolists/${list.body.id}`),
-    ).expect(200);
+    const refetched = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(200);
     expect(refetched.body.items).toEqual([]);
   });
 
   it('marks all list items of a todo list as done in one call', async () => {
-    const list = await authed(
-      request(app.getHttpServer()).post('/api/todolists'),
-    )
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
       .send({ name: 'bulk done' })
       .expect(201);
 
-    await authed(
-      request(app.getHttpServer()).post(
-        `/api/todolists/${list.body.id}/items`,
-      ),
-    )
+    await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/items`)
       .send({ value: 'Buy milk' })
       .expect(201);
-    await authed(
-      request(app.getHttpServer()).post(
-        `/api/todolists/${list.body.id}/items`,
-      ),
-    )
+    await request(app.getHttpServer())
+      .post(`/api/todolists/${list.body.id}/items`)
       .send({ value: 'Buy eggs' })
       .expect(201);
 
-    await authed(
-      request(app.getHttpServer()).put(`/api/todolists/${list.body.id}/done`),
-    ).expect(200);
+    await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/done`)
+      .expect(200);
 
-    // Single GET confirms both items are done — no extra call needed
-    const refetched = await authed(
-      request(app.getHttpServer()).get(`/api/todolists/${list.body.id}`),
-    ).expect(200);
+    const refetched = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(200);
     expect(refetched.body.items).toHaveLength(2);
     expect(
       refetched.body.items.map((i: { done: boolean }) => i.done),
     ).toEqual([true, true]);
 
-    // Marking done again is idempotent
-    await authed(
-      request(app.getHttpServer()).put(`/api/todolists/${list.body.id}/done`),
-    ).expect(200);
+    await request(app.getHttpServer())
+      .put(`/api/todolists/${list.body.id}/done`)
+      .expect(200);
   });
 
   it('returns 404 when marking a missing todo list as done', async () => {
-    await authed(
-      request(app.getHttpServer()).put('/api/todolists/999999/done'),
-    ).expect(404);
+    await request(app.getHttpServer())
+      .put('/api/todolists/999999/done')
+      .expect(404);
   });
 });
