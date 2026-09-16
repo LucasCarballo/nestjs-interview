@@ -21,7 +21,10 @@
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers-extra/features/nestjs-cli:2": {}
-	}
+	},
+
+	// Symlink host's opencode binary (mounted by docker-compose) onto PATH.
+	"postCreateCommand": "mkdir -p ${HOME}/.local/bin && ln -sf ${HOME}/.opencode/bin/opencode ${HOME}/.local/bin/opencode"
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
