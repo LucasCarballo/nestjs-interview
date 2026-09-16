@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TodoListsModule } from './todo_lists/todo_lists.module';
 import { ListItemsModule } from './list_items/list_items.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,10 +20,17 @@ import { ListItem } from './list_items/list_item.entity';
       database: process.env.DB_DATABASE ?? 'nestjs_db',
       entities: [TodoList, ListItem],
       synchronize: true,
-      logging: true,
+      // ponytail: errors+warnings only; `true` drowns request logs in SQL
+      logging: ['error', 'warn'],
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: Number(process.env.THROTTLE_TTL_MS ?? 60000),
+        limit: Number(process.env.THROTTLE_LIMIT ?? 100),
+      },
+    ]),
   ],
   controllers: [],
-  providers: [],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

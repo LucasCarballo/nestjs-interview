@@ -4,6 +4,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 
+// Don't let the global throttler guard trip tests on repeated runs
+process.env.THROTTLE_LIMIT = '10000';
+
 describe('Todo API (e2e)', () => {
   let app: INestApplication;
 

@@ -45,6 +45,16 @@ http://localhost:3000/api/docs
 It lets you explore every endpoint and try requests directly from the browser.
 The OpenAPI JSON behind it is served at `http://localhost:3000/api/docs-json`.
 
+## Observability & security
+
+- **Request logs:** every request is logged as `METHOD path status duration`
+  (Nest `HTTP` context).
+- **Rate limiting:** global ThrottlerGuard, 100 requests/min by default.
+  Tune via `THROTTLE_LIMIT` and `THROTTLE_TTL_MS`.
+- **CORS:** set `CORS_ORIGIN` (comma-separated origins) to restrict who can
+  call the API; unset = permissive (reflects any origin) for local dev.
+- **Validation:** global `ValidationPipe` with `whitelist` + `transform`.
+
 ## Test
 
 ```bash
