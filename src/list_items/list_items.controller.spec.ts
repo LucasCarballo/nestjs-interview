@@ -8,6 +8,7 @@ describe('ListItemsController', () => {
 
   beforeEach(async () => {
     service = {
+      list: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -29,6 +30,23 @@ describe('ListItemsController', () => {
       .compile();
 
     controller = module.get<ListItemsController>(ListItemsController);
+  });
+
+  describe('list', () => {
+    it('delegates to service.list with todoListId, page, pageSize', async () => {
+      const result = {
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 50,
+        totalPages: 1,
+      };
+      service.list.mockResolvedValue(result);
+      await expect(
+        controller.list({ todoListId: 1 }, { page: 2, pageSize: 25 }),
+      ).resolves.toEqual(result);
+      expect(service.list).toHaveBeenCalledWith(1, 2, 25);
+    });
   });
 
   describe('create', () => {

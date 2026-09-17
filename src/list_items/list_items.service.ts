@@ -15,6 +15,41 @@ export class ListItemsService {
     private readonly todoListRepository: Repository<TodoList>,
   ) {}
 
+  // Paginated read for items beyond the cap that the parent GET embeds.
+  // Returns 404 if the parent list doesn't exist so callers don't silently
+  // get an empty page for a typo'd id.
+  async list(
+    todoListId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<{
+    items: ListItem[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
+    const list = await this.todoListRepository.findOne({
+      where: { id: todoListId },
+    });
+    if (!list) {
+      throw new NotFoundException(`Todo list ${todoListId} not found`);
+    }
+    const [items, total] = await this.listItemRepository.findAndCount({
+      where: { todoListId },
+      order: { id: 'ASC' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
   async create(
     todoListId: number,
     dto: CreateListItemDto,

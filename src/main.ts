@@ -19,10 +19,21 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Todo API')
-    .setDescription('CRUD for todo lists and list items')
-    .setVersion('1.0')
+    .setDescription(
+      'CRUD for todo lists with nested list items. Every list/item is ' +
+        'eager-loaded into a single response; no separate read endpoints ' +
+        'for items.',
+    )
+    .setVersion('1')
+    .addTag('todo-lists', 'Operations on todo lists and their items')
     .build();
-  const document = SwaggerModule.createDocument(app, config);
+
+  // deepScanRoutes: true makes the scanner walk every @ApiBody / @ApiResponse
+  // decorator and register the referenced DTOs in components.schemas. Without
+  // it, only body DTOs referenced by @Body() appear.
+  const document = SwaggerModule.createDocument(app, config, {
+    deepScanRoutes: true,
+  });
   SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(3000);

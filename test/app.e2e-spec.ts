@@ -42,7 +42,8 @@ describe('Todo API (e2e)', () => {
     const empty = await request(app.getHttpServer())
       .get('/api/todolists')
       .expect(200);
-    expect(Array.isArray(empty.body)).toBe(true);
+    expect(Array.isArray(empty.body.items)).toBe(true);
+    expect(empty.body.total).toBe(0);
 
     const created = await request(app.getHttpServer())
       .post('/api/todolists')
@@ -205,5 +206,125 @@ describe('Todo API (e2e)', () => {
     await request(app.getHttpServer())
       .put('/api/todolists/999999/done')
       .expect(404);
+  });
+
+  it('caps items in the parent response and exposes pagination metadata', async () => {
+    // 25 items, cap is 20 -> itemsTruncated=true, totalItems=25
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
+      .send({ name: 'big list' })
+      .expect(201);
+    const itemIds: number[] = [];
+    for (let i = 0; i < 25; i++) {
+      const r = await request(app.getHttpServer())
+        .post(`/api/todolists/${list.body.id}/items`)
+        .send({ value: `item ${i}` });
+      itemIds.push(r.body.id);
+    }
+
+    const parent = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(200);
+    expect(parent.body.items).toHaveLength(20);
+    expect(parent.body.totalItems).toBe(25);
+    expect(parent.body.itemsTruncated).toBe(true);
+
+    // Paginated endpoint can fetch the missing 5
+    const page2 = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}/items?page=2&pageSize=20`)
+      .expect(200);
+    expect(page2.body.items).toHaveLength(5);
+    expect(page2.body.total).toBe(25);
+    expect(page2.body.page).toBe(2);
+    expect(page2.body.pageSize).toBe(20);
+    expect(page2.body.totalPages).toBe(2);
+
+    // pageSize > 200 -> 400
+    await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}/items?pageSize=201`)
+      .expect(400);
+
+    // page < 1 -> 400
+    await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}/items?page=0`)
+      .expect(400);
+
+    // missing parent -> 404
+    await request(app.getHttpServer())
+      .get('/api/todolists/999999/items')
+      .expect(404);
+  });
+
+  it('does not truncate when items <= cap', async () => {
+    const list = await request(app.getHttpServer())
+      .post('/api/todolists')
+      .send({ name: 'small list' })
+      .expect(201);
+    for (let i = 0; i < 5; i++) {
+      await request(app.getHttpServer())
+        .post(`/api/todolists/${list.body.id}/items`)
+        .send({ value: `item ${i}` })
+        .expect(201);
+    }
+    const parent = await request(app.getHttpServer())
+      .get(`/api/todolists/${list.body.id}`)
+      .expect(200);
+    expect(parent.body.items).toHaveLength(5);
+    expect(parent.body.totalItems).toBe(5);
+    expect(parent.body.itemsTruncated).toBe(false);
+  });
+
+  it('paginates the index endpoint with summary lists', async () => {
+    // Create 3 lists with a unique prefix so we can count "ours" in a
+    // shared DB. (Tests don't reset the DB between cases.)
+    const prefix = `paginated-${Date.now()}-`;
+    const createdIds: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await request(app.getHttpServer())
+        .post('/api/todolists')
+        .send({ name: `${prefix}${i}` })
+        .expect(201);
+      createdIds.push(r.body.id);
+    }
+
+    // Default page size of 50 — every list fits in one page.
+    const page1 = await request(app.getHttpServer())
+      .get('/api/todolists')
+      .expect(200);
+    expect(page1.body.pageSize).toBe(50);
+    expect(page1.body.page).toBe(1);
+    expect(page1.body.items.length).toBeGreaterThanOrEqual(3);
+    // All 3 of ours are present
+    const ours = page1.body.items.filter((l: { id: number }) =>
+      createdIds.includes(l.id),
+    );
+    expect(ours).toHaveLength(3);
+    // Each is a summary — no items nested
+    for (const list of page1.body.items) {
+      expect(list.items).toEqual([]);
+      expect(list.totalItems).toBe(0);
+      expect(list.itemsTruncated).toBe(false);
+    }
+
+    // pageSize=2 — only 2 lists per page
+    const p1s2 = await request(app.getHttpServer())
+      .get('/api/todolists?page=1&pageSize=2')
+      .expect(200);
+    expect(p1s2.body.items).toHaveLength(2);
+    expect(p1s2.body.page).toBe(1);
+    expect(p1s2.body.pageSize).toBe(2);
+    expect(p1s2.body.total).toBeGreaterThanOrEqual(3);
+    expect(p1s2.body.totalPages).toBeGreaterThanOrEqual(2);
+
+    const p2s2 = await request(app.getHttpServer())
+      .get('/api/todolists?page=2&pageSize=2')
+      .expect(200);
+    expect(p2s2.body.page).toBe(2);
+    expect(p2s2.body.items).toHaveLength(2);
+
+    // pageSize > 50 -> 400
+    await request(app.getHttpServer())
+      .get('/api/todolists?pageSize=51')
+      .expect(400);
   });
 });

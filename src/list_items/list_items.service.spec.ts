@@ -13,6 +13,7 @@ describe('ListItemsService', () => {
   beforeEach(async () => {
     itemRepo = {
       findOne: jest.fn(),
+      findAndCount: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
@@ -31,6 +32,45 @@ describe('ListItemsService', () => {
     }).compile();
 
     service = module.get<ListItemsService>(ListItemsService);
+  });
+
+  describe('list (paginated)', () => {
+    it('returns paginated items with metadata', async () => {
+      const list = { id: 1 };
+      const items = [{ id: 1 }, { id: 2 }];
+      listRepo.findOne.mockResolvedValue(list);
+      itemRepo.findAndCount.mockResolvedValue([items, 47] as never);
+
+      const result = await service.list(1, 1, 2);
+      expect(result).toEqual({
+        items,
+        total: 47,
+        page: 1,
+        pageSize: 2,
+        totalPages: 24, // ceil(47 / 2)
+      });
+      expect(itemRepo.findAndCount).toHaveBeenCalledWith({
+        where: { todoListId: 1 },
+        order: { id: 'ASC' },
+        skip: 0,
+        take: 2,
+      });
+    });
+
+    it('clamps totalPages to 1 when total=0', async () => {
+      listRepo.findOne.mockResolvedValue({ id: 1 });
+      itemRepo.findAndCount.mockResolvedValue([[], 0] as never);
+      const result = await service.list(1, 1, 50);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('throws NotFoundException when the parent list is missing', async () => {
+      listRepo.findOne.mockResolvedValue(null);
+      await expect(service.list(999, 1, 50)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(itemRepo.findAndCount).not.toHaveBeenCalled();
+    });
   });
 
   describe('create', () => {

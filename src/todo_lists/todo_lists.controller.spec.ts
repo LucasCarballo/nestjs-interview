@@ -30,11 +30,19 @@ describe('TodoListsController', () => {
   });
 
   describe('index', () => {
-    it('delegates to service.all', async () => {
-      const lists = [{ id: 1, name: 'Shopping List', items: [] }];
-      service.all.mockResolvedValue(lists);
-      await expect(controller.index()).resolves.toEqual(lists);
-      expect(service.all).toHaveBeenCalledWith();
+    it('delegates to service.all with page and pageSize from the query', async () => {
+      const result = {
+        items: [],
+        total: 0,
+        page: 2,
+        pageSize: 25,
+        totalPages: 1,
+      };
+      service.all.mockResolvedValue(result);
+      await expect(
+        controller.index({ page: 2, pageSize: 25 }),
+      ).resolves.toEqual(result);
+      expect(service.all).toHaveBeenCalledWith(2, 25);
     });
   });
 

@@ -1,7 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
-import { ListItem } from '../list_items/list_item.entity';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
+// ponytail: items live behind the paginated endpoint, not on the entity.
+// Keeping the entity "items-free" makes it impossible to accidentally
+// eager-load them via `relations: ['items']` — which would defeat the cap.
+// Cascade-delete still works: ListItem.todoList has `onDelete: 'CASCADE'`
+// and the FK in the DB enforces it.
 @Entity()
 export class TodoList {
   @ApiProperty({ example: 1 })
@@ -11,7 +15,4 @@ export class TodoList {
   @ApiProperty({ example: 'Shopping List' })
   @Column()
   name: string;
-
-  @OneToMany(() => ListItem, (item) => item.todoList, { cascade: true })
-  items: ListItem[];
 }
