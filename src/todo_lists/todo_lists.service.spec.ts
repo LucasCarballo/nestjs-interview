@@ -9,6 +9,7 @@ describe('TodoListsService', () => {
   let service: TodoListsService;
   let todoRepo: jest.Mocked<Record<string, jest.Mock>>;
   let itemRepo: jest.Mocked<Record<string, jest.Mock>>;
+  let managerQuery: jest.Mock;
 
   beforeEach(async () => {
     todoRepo = {
@@ -20,13 +21,15 @@ describe('TodoListsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    itemRepo = {
+    managerQuery = jest.fn().mockResolvedValue([]);
+    itemRepo = ({
       find: jest.fn(),
       findAndCount: jest.fn(),
       count: jest.fn(),
       create: jest.fn(),
       createQueryBuilder: jest.fn(),
-    };
+      manager: { query: managerQuery },
+    } as unknown) as jest.Mocked<Record<string, jest.Mock>>;
     // Default: empty QueryBuilder returning no ranked rows + no totals.
     itemRepo.createQueryBuilder.mockReturnValue({
       select: jest.fn().mockReturnThis(),
@@ -52,20 +55,46 @@ describe('TodoListsService', () => {
   });
 
   describe('all', () => {
-    it('returns paginated list summaries (no items)', async () => {
+    it('returns paginated summaries with counts from the GROUP BY query', async () => {
       const lists = [{ id: 1, name: 'A' }, { id: 2, name: 'B' }];
       todoRepo.findAndCount.mockResolvedValue([lists, 2] as never);
+      managerQuery.mockResolvedValue([
+        { todoListId: 1, total: 47, doneCount: 12 },
+        { todoListId: 2, total: 3, doneCount: 3 },
+      ]);
+
       const result = await service.all(1, 10);
       expect(result.items).toHaveLength(2);
       expect(result.items[0]).toEqual({
         id: 1,
         name: 'A',
-        items: [],
-        totalItems: 0,
-        itemsTruncated: false,
+        totalItems: 47,
+        doneItems: 12,
+      });
+      expect(result.items[1]).toEqual({
+        id: 2,
+        name: 'B',
+        totalItems: 3,
+        doneItems: 3,
       });
       expect(result.total).toBe(2);
       expect(result.totalPages).toBe(1);
+    });
+
+    it('defaults counts to 0 for lists with no items', async () => {
+      const lists = [{ id: 1, name: 'Empty' }];
+      todoRepo.findAndCount.mockResolvedValue([lists, 1] as never);
+      // manager.query returns no rows for this list — the GROUP BY didn't
+      // include it because it has no items.
+      managerQuery.mockResolvedValue([]);
+
+      const result = await service.all(1, 10);
+      expect(result.items[0]).toEqual({
+        id: 1,
+        name: 'Empty',
+        totalItems: 0,
+        doneItems: 0,
+      });
     });
 
     it('caps pageSize at LISTS_IN_INDEX_LIMIT', async () => {

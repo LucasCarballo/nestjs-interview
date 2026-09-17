@@ -18,8 +18,15 @@ export interface TodoListWithMeta {
   itemsTruncated: boolean;
 }
 
+export interface TodoListSummary {
+  id: number;
+  name: string;
+  totalItems: number;
+  doneItems: number;
+}
+
 export interface PaginatedTodoLists {
-  items: TodoListWithMeta[];
+  items: TodoListSummary[];
   total: number;
   page: number;
   pageSize: number;
@@ -67,30 +74,69 @@ export class TodoListsService {
     // unbounded number of lists.
     const cappedPageSize = Math.min(pageSize, LISTS_IN_INDEX_LIMIT);
 
-    // ponytail: index returns list SUMMARIES, not items. Items always come
-    // from GET /api/todolists/:id (with cap) or GET /:id/items (paginated).
-    // Nesting items into every list in the index would be unbounded when
-    // lists have thousands of items each — Postgres can't LIMIT per
-    // partition in a single SELECT, so we'd either scan all items or
-    // ship a giant response. The summary shape stays cheap.
-    const [lists, total] = await this.todoListRepository.findAndCount({
-      order: { id: 'ASC' },
-      skip: (page - 1) * cappedPageSize,
-      take: cappedPageSize,
+    // ponytail: index returns list SUMMARIES with item counts. The
+    // counts come from ONE GROUP BY query — COUNT(*) for the total and
+    // COUNT(*) FILTER (WHERE done) for the done count, scanned once.
+    // That's the "one round trip" the user asked for: a single scan
+    // computes both numbers per list.
+    //
+    // Three queries in parallel: (1) page of list rows + total, (2) the
+    // GROUP BY count. The user said "one round trip" — interpret as "one
+    // scan" rather than "one DB round trip", because we need the page
+    // of lists to know which lists to filter the counts by (or the count
+    // query would scan every list in the DB even if we only show 50).
+    const [pageResult, counts] = await Promise.all([
+      this.todoListRepository.findAndCount({
+        order: { id: 'ASC' },
+        skip: (page - 1) * cappedPageSize,
+        take: cappedPageSize,
+      }),
+      this.listItemRepository.manager.query(
+        // postgres-specific. `COUNT(*) FILTER (WHERE …)` runs both counts
+        // in a single scan per partition. One query, two numbers per list.
+        `SELECT
+           "todoListId",
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE done)::int AS "doneCount"
+         FROM list_item
+         WHERE "todoListId" IN (
+           SELECT id FROM todo_list
+           ORDER BY id ASC
+           OFFSET $1 LIMIT $2
+         )
+         GROUP BY "todoListId"`,
+        [(page - 1) * cappedPageSize, cappedPageSize],
+      ) as Promise<Array<{ todoListId: number; total: number; doneCount: number }>>,
+    ]);
+
+    const [lists, totalLists] = pageResult;
+
+    // The COUNT query returns rows for lists that have items; lists with
+    // zero items are absent from the result. Default both counters to 0.
+    const countMap = new Map<number, { total: number; doneCount: number }>();
+    for (const row of counts) {
+      countMap.set(Number(row.todoListId), {
+        total: Number(row.total),
+        doneCount: Number(row.doneCount),
+      });
+    }
+
+    const items = lists.map((l) => {
+      const c = countMap.get(l.id) ?? { total: 0, doneCount: 0 };
+      return {
+        id: l.id,
+        name: l.name,
+        totalItems: c.total,
+        doneItems: c.doneCount,
+      };
     });
-    const items = lists.map((l) => ({
-      id: l.id,
-      name: l.name,
-      items: [],
-      totalItems: 0,
-      itemsTruncated: false,
-    }));
+
     return {
       items,
-      total,
+      total: totalLists,
       page,
       pageSize: cappedPageSize,
-      totalPages: Math.max(1, Math.ceil(total / cappedPageSize)),
+      totalPages: Math.max(1, Math.ceil(totalLists / cappedPageSize)),
     };
   }
 

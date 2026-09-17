@@ -294,16 +294,17 @@ describe('Todo API (e2e)', () => {
     expect(page1.body.pageSize).toBe(50);
     expect(page1.body.page).toBe(1);
     expect(page1.body.items.length).toBeGreaterThanOrEqual(3);
-    // All 3 of ours are present
+    // All 3 of ours are present, with count fields populated (0 because
+    // we didn't add items to these lists)
     const ours = page1.body.items.filter((l: { id: number }) =>
       createdIds.includes(l.id),
     );
     expect(ours).toHaveLength(3);
-    // Each is a summary — no items nested
+    // Summary shape — no items nested, but counts are real
     for (const list of page1.body.items) {
-      expect(list.items).toEqual([]);
-      expect(list.totalItems).toBe(0);
-      expect(list.itemsTruncated).toBe(false);
+      expect(list.items).toBeUndefined();
+      expect(typeof list.totalItems).toBe('number');
+      expect(typeof list.doneItems).toBe('number');
     }
 
     // pageSize=2 — only 2 lists per page
@@ -326,5 +327,33 @@ describe('Todo API (e2e)', () => {
     await request(app.getHttpServer())
       .get('/api/todolists?pageSize=51')
       .expect(400);
+  });
+
+  it('reports totalItems and doneItems per list in the index', async () => {
+    const r = await request(app.getHttpServer())
+      .post('/api/todolists')
+      .send({ name: `counts-${Date.now()}` })
+      .expect(201);
+    const id = r.body.id;
+    // 4 items, 2 marked done
+    for (const v of ['a', 'b', 'c', 'd']) {
+      const item = await request(app.getHttpServer())
+        .post(`/api/todolists/${id}/items`)
+        .send({ value: v })
+        .expect(201);
+      if (v === 'b' || v === 'd') {
+        await request(app.getHttpServer())
+          .patch(`/api/todolists/${id}/items/${item.body.id}`)
+          .send({ done: true })
+          .expect(200);
+      }
+    }
+    const index = await request(app.getHttpServer())
+      .get('/api/todolists')
+      .expect(200);
+    const mine = index.body.items.find((l: { id: number }) => l.id === id);
+    expect(mine).toBeDefined();
+    expect(mine.totalItems).toBe(4);
+    expect(mine.doneItems).toBe(2);
   });
 });

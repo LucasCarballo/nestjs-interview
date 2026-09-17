@@ -6,6 +6,18 @@ export class TodoListSummaryDto {
 
   @ApiProperty({ example: 'Shopping List' })
   name: string;
+
+  @ApiProperty({
+    example: 47,
+    description: 'Total items in the todo list',
+  })
+  totalItems: number;
+
+  @ApiProperty({
+    example: 12,
+    description: 'Items in the todo list that are checked off',
+  })
+  doneItems: number;
 }
 
 export class PaginatedTodoListsResponseDto {
